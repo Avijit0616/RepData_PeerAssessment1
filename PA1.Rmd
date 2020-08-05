@@ -1,0 +1,105 @@
+---
+title: 'Reproducible Research: Week 2 Assignment'
+author: "Avijit"
+date: "14^th^ July 2020"
+output: 
+  html_document: 
+    keep_md: yes
+---
+```{r include=FALSE}
+setwd("D:/R working directory")
+library(dplyr)
+library(data.table)
+library(ggplot2)
+```
+
+## Loading and processing data
+```{r}
+if(!file.exists("./activity.csv")){
+download.file(url = "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+              ,destfile = "./activity_data.zip")
+unzip(zipfile = "./activity_data.zip")
+}
+d <- fread("./activity.csv")
+
+```
+
+## Number of steps taken each day
+
+```{r}
+bydate <- d %>%
+    select(steps,date) %>%
+    group_by(date) %>%
+    summarise(total_steps = sum(steps)) %>%
+    na.omit()
+
+hist(bydate$total_steps,
+     xlab = "Total daily Steps",main="Histogram of Total Steps by day",
+     breaks = 20)
+```
+
+## Mean and median of the total number of steps taken per day
+```{r}
+mean(bydate$total_steps)
+median(bydate$total_steps)
+```
+
+## Time series plot of the 5-minute interval and the average number of steps taken, averaged across all days
+```{r}
+byint <- d %>%
+    select(steps, interval) %>%
+    na.omit() %>%
+    group_by(interval) %>%
+    summarise(average_steps = mean(steps))
+
+ggplot(byint, aes(x = interval, y = average_steps)) + geom_line()
+```
+
+## 5-minute interval, on average across all the days, that contains the maximum number of steps
+```{r}
+byint[which.max(byint$average_steps),]
+```
+
+## Number of missing values in the dataset
+```{r}
+length(which(is.na(d$steps)))
+```
+
+## Imputing missing values and replacing them with the mean for that 5 -minute interval
+```{r}
+replacewithmean <- function(x){
+    replace(x,is.na(x), mean(x, na.rm = T))
+}
+byintmean <- d %>%
+    group_by(interval) %>%
+    mutate(steps = replacewithmean(steps))
+
+bydate_impute <- byintmean %>%
+    group_by(date) %>%
+    summarise(total_steps = sum(steps))
+
+qplot(total_steps, data = bydate_impute, binwidth = 500,
+      xlab='Steps per day', ylab='Frequency',
+      main = 'Histogram of the total number of steps taken each day')
+```
+
+## Mean and median of imputed and original data
+```{r}
+summary(bydate_impute)
+summary(bydate)
+```
+
+## Activity patterns on weekdays and weekends
+```{r}
+byintmean$date <- as.Date(byintmean$date)
+byintmean$day <- weekdays(byintmean$date)
+byintmean$weekday <- with(byintmean,
+                          ifelse(day == "Saturday"|day == "Sunday","Weekend", "Weekday"))
+
+byweekend <- byintmean %>%
+    group_by(weekday,interval) %>%
+    summarise(avg = mean(steps))
+qplot(interval, avg, data = byweekend, facets = weekday~., color = weekday,
+      geom = "line")
+```
+
